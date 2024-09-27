@@ -1,6 +1,8 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+import os
+import datetime
 
 # Initialize Mediapipe Face Detection and Face Mesh modules
 mp_face_detection = mp.solutions.face_detection
@@ -12,21 +14,23 @@ WINDOW_HEIGHT = 360  # Fixed height of the output window
 FIXED_FACE_SIZE = 300  # Desired face size in pixels
 SMOOTHING_FACTOR = 0.5  # Smoothing factor for translation
 SMOOTHING_SCALE = 0.3  # Smoothing factor for scaling
-THRESHOLD_POSITION = 20  # Threshold for position changes
+THRESHOLD_POSITION = 10  # Threshold for position changes
 THRESHOLD_SCALE = 0.08  # Threshold for scale changes
+EYE_TO_FACE_CENTER_OFFSET = 50  # How much to move the face upward relative to the eyes
 
 # Initialize previous translation values and size
 prev_translate_x = 0
 prev_translate_y = 0
 prev_scale_factor = 1.0  # Initial scale factor
-
 prev_bbox = None
 
+# Initialize the person's name
+person_surname = "SURNAME"
+person_name = "FIRSTNAME"
 
 def smooth_coordinates(current, previous, smoothing):
     """Smooths the coordinates using a moving average."""
     return previous + (current - previous) * smoothing
-
 
 def apply_threshold(value, previous, threshold, smoothing):
     """Applies a threshold to ignore small changes."""
@@ -34,6 +38,30 @@ def apply_threshold(value, previous, threshold, smoothing):
         return previous + (value - previous) * smoothing
     return previous
 
+def change_name(new_surname, new_name):
+    """Function to change the person's name."""
+    global person_surname, person_name
+    person_surname = new_surname
+    person_name = new_name
+
+def get_face(image):
+    """Captures and saves the center of the face."""
+    # Crop the image on the center box
+    face_image = image[(WINDOW_HEIGHT - FIXED_FACE_SIZE) // 2:(WINDOW_HEIGHT + FIXED_FACE_SIZE) // 2, (WINDOW_WIDTH - FIXED_FACE_SIZE) // 2:(WINDOW_WIDTH + FIXED_FACE_SIZE) // 2]
+
+    return face_image
+
+def save_face(face_image):
+    """Saves the face image to the specified filename."""
+    # Save the face image
+    face_dir = 'captured_faces'
+    os.makedirs(face_dir, exist_ok=True)
+    # Date today in the format YYYY-MM-DD-HH-MM-SS
+    random_suffix = np.random.randint(1000)
+    today = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    face_filename = os.path.join(face_dir, f'{today}_{person_name}_{person_surname}_{random_suffix}.png')
+    cv2.imwrite(face_filename, face_image)
+    print(f'Face saved as {face_filename}')
 
 def main():
     global prev_translate_x, prev_translate_y, prev_scale_factor, prev_bbox
@@ -41,11 +69,7 @@ def main():
     # Start video capture
     cap = cv2.VideoCapture(0)
 
-    with mp_face_detection.FaceDetection(
-        min_detection_confidence=0.5
-    ) as face_detection, mp_face_mesh.FaceMesh(
-        min_detection_confidence=0.5
-    ) as face_mesh:
+    with mp_face_detection.FaceDetection(min_detection_confidence=0.5) as face_detection, mp_face_mesh.FaceMesh(min_detection_confidence=0.5) as face_mesh:
         while cap.isOpened():
             success, image = cap.read()
             if not success:
@@ -69,14 +93,8 @@ def main():
             scale_factor = 1.0
 
             # If faces are detected
-            if (
-                face_detection_results.detections
-                and face_mesh_results.multi_face_landmarks
-            ):
-                for detection, landmarks in zip(
-                    face_detection_results.detections,
-                    face_mesh_results.multi_face_landmarks,
-                ):
+            if face_detection_results.detections and face_mesh_results.multi_face_landmarks:
+                for detection, landmarks in zip(face_detection_results.detections, face_mesh_results.multi_face_landmarks):
                     # Get the bounding box
                     bboxC = detection.location_data.relative_bounding_box
                     x_min = int(bboxC.xmin * w)
@@ -84,158 +102,70 @@ def main():
                     width = int(bboxC.width * w)
                     height = int(bboxC.height * h)
 
-                    # Smooth the bounding box coordinates
-                    current_bbox = (x_min, y_min, width, height)
-                    if prev_bbox is None:
-                        prev_bbox = current_bbox
-                    else:
-                        smoothed_x_min = smooth_coordinates(
-                            apply_threshold(
-                                x_min,
-                                prev_bbox[0],
-                                THRESHOLD_POSITION,
-                                SMOOTHING_FACTOR,
-                            ),
-                            prev_bbox[0],
-                            SMOOTHING_FACTOR,
-                        )
-                        smoothed_y_min = smooth_coordinates(
-                            apply_threshold(
-                                y_min,
-                                prev_bbox[1],
-                                THRESHOLD_POSITION,
-                                SMOOTHING_FACTOR,
-                            ),
-                            prev_bbox[1],
-                            SMOOTHING_FACTOR,
-                        )
-                        smoothed_width = smooth_coordinates(
-                            apply_threshold(
-                                width,
-                                prev_bbox[2],
-                                THRESHOLD_POSITION,
-                                SMOOTHING_SCALE,
-                            ),
-                            prev_bbox[2],
-                            SMOOTHING_SCALE,
-                        )
-                        smoothed_height = smooth_coordinates(
-                            apply_threshold(
-                                height,
-                                prev_bbox[3],
-                                THRESHOLD_POSITION,
-                                SMOOTHING_SCALE,
-                            ),
-                            prev_bbox[3],
-                            SMOOTHING_SCALE,
-                        )
-                        prev_bbox = (
-                            smoothed_x_min,
-                            smoothed_y_min,
-                            smoothed_width,
-                            smoothed_height,
-                        )
+                    # Extract the left and right eye positions (landmarks 33 and 263 for the eyes)
+                    left_eye = landmarks.landmark[33]
+                    right_eye = landmarks.landmark[263]
 
-                    # Draw the smoothed bounding box around the face
-                    cv2.rectangle(
-                        image,
-                        (int(prev_bbox[0]), int(prev_bbox[1])),
-                        (
-                            int(prev_bbox[0] + prev_bbox[2]),
-                            int(prev_bbox[1] + prev_bbox[3]),
-                        ),
-                        (0, 255, 0),
-                        2,
-                    )
+                    # Get eye coordinates in pixel space
+                    left_eye_x = int(left_eye.x * w)
+                    left_eye_y = int(left_eye.y * h)
+                    right_eye_x = int(right_eye.x * w)
+                    right_eye_y = int(right_eye.y * h)
 
-                    # Calculate the center of the bounding box
-                    bbox_center_x = x_min + width // 2
-                    bbox_center_y = y_min + height // 2
+                    # Average the positions to get the midpoint of the eyes
+                    eye_center_x = (left_eye_x + right_eye_x) // 2
+                    eye_center_y = (left_eye_y + right_eye_y) // 2
 
-                    # Calculate translation for stabilization using the center of the bounding box
-                    translate_x = (WINDOW_WIDTH // 2) - bbox_center_x
-                    translate_y = (WINDOW_HEIGHT // 2) - bbox_center_y
+                    # Calculate the translation for stabilization using the eye center
+                    translate_x = (WINDOW_WIDTH // 2) - eye_center_x
+                    translate_y = (WINDOW_HEIGHT // 2) - eye_center_y - EYE_TO_FACE_CENTER_OFFSET
 
                     # Apply threshold and smooth the translations using a moving average
                     prev_translate_x = smooth_coordinates(
-                        apply_threshold(
-                            translate_x,
-                            prev_translate_x,
-                            THRESHOLD_POSITION,
-                            SMOOTHING_FACTOR,
-                        ),
-                        prev_translate_x,
-                        SMOOTHING_FACTOR,
-                    )
+                        apply_threshold(translate_x, prev_translate_x, THRESHOLD_POSITION, SMOOTHING_FACTOR),
+                        prev_translate_x, SMOOTHING_FACTOR)
                     prev_translate_y = smooth_coordinates(
-                        apply_threshold(
-                            translate_y,
-                            prev_translate_y,
-                            THRESHOLD_POSITION,
-                            SMOOTHING_FACTOR,
-                        ),
-                        prev_translate_y,
-                        SMOOTHING_FACTOR,
-                    )
+                        apply_threshold(translate_y, prev_translate_y, THRESHOLD_POSITION, SMOOTHING_FACTOR),
+                        prev_translate_y, SMOOTHING_FACTOR)
 
                     # Calculate the scale factor based on the bounding box height
-                    face_distance = (
-                        height  # Using the height of the bounding box for distance
-                    )
-                    new_scale_factor = FIXED_FACE_SIZE / (
-                        face_distance + 1
-                    )  # Avoid division by zero
+                    face_distance = height  # Using the height of the bounding box for distance
+                    new_scale_factor = FIXED_FACE_SIZE / (face_distance + 1)  # Avoid division by zero
 
                     # Apply threshold and smooth the scale factor
                     prev_scale_factor = smooth_coordinates(
-                        apply_threshold(
-                            new_scale_factor,
-                            prev_scale_factor,
-                            THRESHOLD_SCALE,
-                            SMOOTHING_SCALE,
-                        ),
-                        prev_scale_factor,
-                        SMOOTHING_SCALE,
-                    )
+                        apply_threshold(new_scale_factor, prev_scale_factor, THRESHOLD_SCALE, SMOOTHING_SCALE),
+                        prev_scale_factor, SMOOTHING_SCALE)
 
                     # Create a transformation matrix for translation
                     M = np.float32([[1, 0, prev_translate_x], [0, 1, prev_translate_y]])
 
                     # Apply translation and resize the image
-                    translated_image = cv2.warpAffine(
-                        image, M, (WINDOW_WIDTH, WINDOW_HEIGHT)
-                    )
+                    translated_image = cv2.warpAffine(image, M, (WINDOW_WIDTH, WINDOW_HEIGHT))
 
                     # Resize the translated image based on the smoothed scale factor
-                    resized_image = cv2.resize(
-                        translated_image,
-                        None,
-                        fx=prev_scale_factor,
-                        fy=prev_scale_factor,
-                    )
+                    resized_image = cv2.resize(translated_image, None, fx=prev_scale_factor, fy=prev_scale_factor)
 
                     # Center the resized image in the output window without black borders
                     resized_height, resized_width = resized_image.shape[:2]
                     if resized_height < WINDOW_HEIGHT or resized_width < WINDOW_WIDTH:
-                        canvas = np.zeros(
-                            (WINDOW_HEIGHT, WINDOW_WIDTH, 3), dtype=np.uint8
-                        )
+                        canvas = np.zeros((WINDOW_HEIGHT, WINDOW_WIDTH, 3), dtype=np.uint8)
                         y_offset = (WINDOW_HEIGHT - resized_height) // 2
                         x_offset = (WINDOW_WIDTH - resized_width) // 2
-                        canvas[
-                            y_offset : y_offset + resized_height,
-                            x_offset : x_offset + resized_width,
-                        ] = resized_image
+                        canvas[y_offset:y_offset + resized_height, x_offset:x_offset + resized_width] = resized_image
                     else:
                         # Crop to fit in the window
-                        canvas = resized_image[
-                            (resized_height - WINDOW_HEIGHT)
-                            // 2 : (resized_height + WINDOW_HEIGHT)
-                            // 2,
-                            (resized_width - WINDOW_WIDTH)
-                            // 2 : (resized_width + WINDOW_WIDTH)
-                            // 2,
-                        ]
+                        canvas = resized_image[(resized_height - WINDOW_HEIGHT) // 2:(resized_height + WINDOW_HEIGHT) // 2,
+                                               (resized_width - WINDOW_WIDTH) // 2:(resized_width + WINDOW_WIDTH) // 2]
+                        
+                    # Save the captured face image
+                    if cv2.waitKey(1) & 0xFF == ord('s'):  # Press 's' to save the face
+                        face_image = get_face(canvas)
+                        save_face(face_image)
+
+                    # Draw the person's name on the canvas
+                    cv2.putText(canvas, person_surname, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+                    cv2.putText(canvas, person_name, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
 
                     # Display the stabilized image on a fixed-size window
                     cv2.imshow("Stabilized Face", canvas)
@@ -247,12 +177,11 @@ def main():
                 cv2.imshow("Stabilized Face", resized_image)
 
             # Exit on pressing 'q'
-            if cv2.waitKey(5) & 0xFF == ord("q"):
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
     cap.release()
     cv2.destroyAllWindows()
-
 
 if __name__ == "__main__":
     main()
