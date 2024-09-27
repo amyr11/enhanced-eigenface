@@ -9,19 +9,22 @@ mp_face_detection = mp.solutions.face_detection
 mp_face_mesh = mp.solutions.face_mesh
 
 # Parameters
-WINDOW_WIDTH = 640  # Fixed width of the output window
-WINDOW_HEIGHT = 360  # Fixed height of the output window
-FIXED_FACE_SIZE = 300  # Desired face size in pixels
-SMOOTHING_FACTOR = 0.5  # Smoothing factor for translation
-SMOOTHING_SCALE = 0.3  # Smoothing factor for scaling
-THRESHOLD_POSITION = 10  # Threshold for position changes
-THRESHOLD_SCALE = 0.08  # Threshold for scale changes
+WINDOW_WIDTH = 1920  # Fixed width of the output window
+WINDOW_HEIGHT = 1080  # Fixed height of the output window
+FIXED_FACE_SIZE = 900  # Desired face size in pixels
+SMOOTHING_FACTOR = 0.4  # Smoothing factor for translation
+SMOOTHING_SCALE = 0.4  # Smoothing factor for scaling
+THRESHOLD_POSITION = 15  # Threshold for position changes
+THRESHOLD_SCALE = 0.2  # Threshold for scale changes
 EYE_TO_FACE_CENTER_OFFSET = 50  # How much to move the face upward relative to the eyes
 
 # Initialize previous translation values and size
 prev_translate_x = 0
 prev_translate_y = 0
 prev_scale_factor = 1.0  # Initial scale factor
+rt_prev_translate_x = 0
+rt_prev_translate_y = 0
+rt_prev_scale_factor = 1.0  # Initial scale factor
 prev_bbox = None
 
 # Initialize the person's name
@@ -64,7 +67,7 @@ def save_face(face_image):
     print(f'Face saved as {face_filename}')
 
 def main():
-    global prev_translate_x, prev_translate_y, prev_scale_factor, prev_bbox
+    global prev_translate_x, prev_translate_y, prev_scale_factor, rt_prev_translate_x, rt_prev_translate_y, rt_prev_scale_factor, prev_bbox
 
     # Start video capture
     cap = cv2.VideoCapture(0)
@@ -90,7 +93,6 @@ def main():
             # Initialize translation variables
             translate_x = 0
             translate_y = 0
-            scale_factor = 1.0
 
             # If faces are detected
             if face_detection_results.detections and face_mesh_results.multi_face_landmarks:
@@ -127,6 +129,12 @@ def main():
                     prev_translate_y = smooth_coordinates(
                         apply_threshold(translate_y, prev_translate_y, THRESHOLD_POSITION, SMOOTHING_FACTOR),
                         prev_translate_y, SMOOTHING_FACTOR)
+                    rt_prev_translate_x = smooth_coordinates(
+                        apply_threshold(translate_x, rt_prev_translate_x, THRESHOLD_POSITION, 0.6),
+                        rt_prev_translate_x, 0.8)
+                    rt_prev_translate_y = smooth_coordinates(
+                        apply_threshold(translate_y, rt_prev_translate_y, THRESHOLD_POSITION, 0.6),
+                        rt_prev_translate_y, 0.8)
 
                     # Calculate the scale factor based on the bounding box height
                     face_distance = height  # Using the height of the bounding box for distance
@@ -136,36 +144,48 @@ def main():
                     prev_scale_factor = smooth_coordinates(
                         apply_threshold(new_scale_factor, prev_scale_factor, THRESHOLD_SCALE, SMOOTHING_SCALE),
                         prev_scale_factor, SMOOTHING_SCALE)
-
-                    # Create a transformation matrix for translation
-                    M = np.float32([[1, 0, prev_translate_x], [0, 1, prev_translate_y]])
-
-                    # Apply translation and resize the image
-                    translated_image = cv2.warpAffine(image, M, (WINDOW_WIDTH, WINDOW_HEIGHT))
-
-                    # Resize the translated image based on the smoothed scale factor
-                    resized_image = cv2.resize(translated_image, None, fx=prev_scale_factor, fy=prev_scale_factor)
+                    rt_prev_scale_factor = smooth_coordinates(
+                        apply_threshold(new_scale_factor, rt_prev_scale_factor, 0.15, 0.8),
+                        rt_prev_scale_factor, 0.8)
 
                     # Center the resized image in the output window without black borders
-                    resized_height, resized_width = resized_image.shape[:2]
-                    if resized_height < WINDOW_HEIGHT or resized_width < WINDOW_WIDTH:
-                        canvas = np.zeros((WINDOW_HEIGHT, WINDOW_WIDTH, 3), dtype=np.uint8)
-                        y_offset = (WINDOW_HEIGHT - resized_height) // 2
-                        x_offset = (WINDOW_WIDTH - resized_width) // 2
-                        canvas[y_offset:y_offset + resized_height, x_offset:x_offset + resized_width] = resized_image
-                    else:
-                        # Crop to fit in the window
-                        canvas = resized_image[(resized_height - WINDOW_HEIGHT) // 2:(resized_height + WINDOW_HEIGHT) // 2,
-                                               (resized_width - WINDOW_WIDTH) // 2:(resized_width + WINDOW_WIDTH) // 2]
+                    def transform(tx, ty, sf):
+                        # Create a transformation matrix for translation
+                        M = np.float32([[1, 0, tx], [0, 1, ty]])
+
+                        # Apply translation and resize the image
+                        translated_image = cv2.warpAffine(image, M, (WINDOW_WIDTH, WINDOW_HEIGHT))
+
+                        # Resize the translated image based on the smoothed scale factor
+                        resized_image = cv2.resize(translated_image, None, fx=sf, fy=sf)
+
+                        resized_height, resized_width = resized_image.shape[:2]
+                        if resized_height < WINDOW_HEIGHT or resized_width < WINDOW_WIDTH:
+                            im = np.zeros((WINDOW_HEIGHT, WINDOW_WIDTH, 3), dtype=np.uint8)
+                            y_offset = (WINDOW_HEIGHT - resized_height) // 2
+                            x_offset = (WINDOW_WIDTH - resized_width) // 2
+                            im[y_offset:y_offset + resized_height, x_offset:x_offset + resized_width] = resized_image
+                        else:
+                            # Crop to fit in the window
+                            im = resized_image[(resized_height - WINDOW_HEIGHT) // 2:(resized_height + WINDOW_HEIGHT) // 2,
+                                                (resized_width - WINDOW_WIDTH) // 2:(resized_width + WINDOW_WIDTH) // 2]
+                        return im
+
+                    canvas = transform(prev_translate_x, prev_translate_y, prev_scale_factor)
+                    rt_canvas = transform(rt_prev_translate_x, rt_prev_translate_y, rt_prev_scale_factor)
+                    cropped_face = get_face(rt_canvas)
+                    cropped_face = cv2.resize(cropped_face, (300, 300))
+                    canvas[-cropped_face.shape[0]:, -cropped_face.shape[1]:] = cropped_face
                         
                     # Save the captured face image
                     if cv2.waitKey(1) & 0xFF == ord('s'):  # Press 's' to save the face
-                        face_image = get_face(canvas)
+                        rt_canvas = transform(rt_prev_translate_x, rt_prev_translate_y, rt_prev_scale_factor)
+                        face_image = get_face(rt_canvas)
                         save_face(face_image)
 
                     # Draw the person's name on the canvas
-                    cv2.putText(canvas, person_surname, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
-                    cv2.putText(canvas, person_name, (10, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
+                    cv2.putText(canvas, person_surname, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2, cv2.LINE_AA)
+                    cv2.putText(canvas, person_name, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
                     # Display the stabilized image on a fixed-size window
                     cv2.imshow("Stabilized Face", canvas)
