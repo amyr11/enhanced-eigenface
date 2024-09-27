@@ -4,7 +4,7 @@ from helpers import log_runtime
 
 class Eigenface:
 	"""
-	The enhanced Eigenface model for face recognition by Francisco and Seraspi (2024).
+	The original Eigenface model for face recognition by Turk and Pentland (1991).
 	"""
 	def __init__(self, X, y, M, fst=None, fct=None, avg_ws=True):
 		"""

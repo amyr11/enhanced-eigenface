@@ -137,7 +137,34 @@ class EnhancedEigenface:
 			(accuracy, precision, recall, rejected) (tuple): Evaluation metrics.
 			(predicted_labels, min_weight_distances, projected_distances) (tuple): Predicted labels, minimum weight distances, and projected distances.
 		"""
-		pass
+
+		predicted_labels, min_weight_distances, projection_distances = self.predict(X_test)
+
+		# Calculate metrics
+		# True positives: Correctly identified faces
+		true_positives = np.sum((y_test == predicted_labels) & (y_test > -1))
+		# False positives: Unknown faces not rejected
+		false_positives = np.sum((predicted_labels > -1) & (y_test < 0) | (y_test == predicted_labels))
+		# False negatives: Known faces not correctly identified
+		false_negatives = np.sum((predicted_labels != y_test) & (y_test > -1))
+		# True negatives: Unknown faces rejected
+		true_unknowns = np.sum((predicted_labels < 0) & (y_test < 0))
+
+		accuracy = (true_positives + true_unknowns) / len(y_test)
+        
+		if true_positives + false_positives > 0:
+			precision = true_positives / (true_positives + false_positives)
+		else:
+			precision = 0
+
+		if true_positives + false_negatives > 0:
+			recall = true_positives / (true_positives + false_negatives)
+		else:
+			recall = 0
+
+		rejected = np.sum(predicted_labels < 0)
+
+		return (accuracy, precision, recall, rejected), (predicted_labels, min_weight_distances, projection_distances)
 
 
 	def _get_weight_space(self):
