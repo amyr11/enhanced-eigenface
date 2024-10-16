@@ -2,7 +2,10 @@ import numpy as np
 import cv2
 import os
 import time
+import umap
 import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report
 
 
 def log_runtime(func):
@@ -154,57 +157,30 @@ def plot_comparison(test_face, test_label, predicted_face, predicted_label):
     plt.show()
 
 
-def plot_report(model, X_test, y_test, X_train, y_train, wrong_only=False):
+def plot_umap_2d(title, data, labels):
     """
-    Show the unknown faces and their closest matches and print the evaluation metrics.
+    Plots a 2D UMAP projection of the data.
 
     Parameters:
-            model: Eigenface model to evaluate.
-            X_test (np.ndarray): Test dataset.
-            y_test (np.ndarray): Labels of the test dataset.
-            X_train (np.ndarray): Train dataset.
-            y_train (np.ndarray): Labels of the train dataset.
-            wrong_only (bool): Whether to show only the wrong matches.
-
-    Returns:
-            None
+    - title (str): The title of the plot.
+    - data (numpy.ndarray): The high-dimensional data to be reduced and plotted.
+    - labels (numpy.ndarray): The labels corresponding to the data points.
     """
-    # predicted_labels, min_weight_distances, projected_distances = model.predict(X_test)
 
-    (accuracy, precision, recall, rejected), (
-        predicted_labels,
-        min_weight_distances,
-        projection_distances,
-    ) = model.report(X_test, y_test)
+    # Reduce the dimensionality of the data using UMAP
+    umap_reducer = umap.UMAP(n_components=2, random_state=42)
+    reduced_data = umap_reducer.fit_transform(data)
 
-    for i in range(len(X_test)):
-        test_label = y_test[i]
-        test_face = X_test[i]
-        predicted_label = predicted_labels[i]
-        predicted_face = find_face_by_label(X_train, y_train, predicted_label)
-
-        if test_label == predicted_label:
-            if not wrong_only:
-                plot_comparison(test_face, test_label, predicted_face, predicted_label)
-                print(f"Correct (wd): {min_weight_distances[i]}")
-                print(f"Correct (fd): {projection_distances[i]}")
-        else:
-            plot_comparison(test_face, test_label, predicted_face, predicted_label)
-            print(f"Wrong (wd): {min_weight_distances[i]}")
-            print(f"Wrong (fd): {projection_distances[i]}")
-
-    print("\n---")
-    print(f"Accuracy: {accuracy}")
-    # print(f'Precision: {precision}')
-    # print(f'Recall: {recall}')
-    # print(f'Rejected: {rejected}')
-
-
-import umap
-import plotly.graph_objects as go
-import numpy as np
-import plotly.express as px
-import plotly.colors as pc
+    # Create a scatter plot with each label plotted in a different color
+    plt.figure(figsize=(10, 10))
+    scatter = plt.scatter(
+        reduced_data[:, 0], reduced_data[:, 1], c=labels, cmap="rocket_r", s=5
+    )
+    plt.colorbar(scatter, label="Label")
+    plt.title(title)
+    plt.xlabel("UMAP 1")
+    plt.ylabel("UMAP 2")
+    plt.show()
 
 
 def plot_umap_3d_with_filter(title, data, labels):
@@ -321,11 +297,19 @@ def plot_umap_3d_with_filter(title, data, labels):
     fig.show()
 
 
-def confusion_matrix(y_pred, y_true):
-    """
-    Plot the confusion matrix of a model.
-    """
-    from sklearn.metrics import classification_report, ConfusionMatrixDisplay
+def plot_confusion_matrix(y_true, y_pred):
+    plt.figure(figsize=(10, 10))
+    ax = plt.subplot()
+    labels = np.unique(y_true)
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    sns.heatmap(cm, annot=True, fmt="g", ax=ax, cmap="rocket_r")
 
-    ConfusionMatrixDisplay.from_predictions(y_pred, y_true)
-    print(classification_report(y_pred, y_true))
+    # print classification report
+    print(classification_report(y_true, y_pred))
+
+    # labels, title and ticks
+    ax.set_xlabel("Predicted labels")
+    ax.set_ylabel("True labels")
+    ax.set_title("Confusion Matrix")
+    ax.xaxis.set_ticklabels(labels)
+    ax.yaxis.set_ticklabels(labels)
