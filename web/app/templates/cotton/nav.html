@@ -1,61 +1,51 @@
 {% load static %}
 
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <script>
-        // Function to display current date and time in the desired format
-        function updateDateTime() {
-            const now = new Date();
-            const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
-            const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
-            const formattedDate = now.toLocaleDateString('en-US', options).replace(',', '.');
-            document.getElementById('current-datetime').textContent = `${formattedDate} · ${time}`;
-        }
-        setInterval(updateDateTime, 1000); // Update every second
-    </script>
-</head>
-
-<body>
-    <div class="drawer sticky top-0 left-0">
-        <input id="my-drawer" type="checkbox" class="drawer-toggle" />
-        <div class="drawer-content">
-            <!-- Page content here -->
-            <div class="navbar bg-base-100/80 backdrop-blur-md z-50">
-                <div class="flex-none">
-                    <label for="my-drawer" class="btn btn-square btn-ghost">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                            class="inline-block h-5 w-5 stroke-current">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 6h16M4 12h16M4 18h16"></path>
-                        </svg>
-                    </label>
-                </div>
-                <div class="flex-1">
-                    <a class="btn btn-ghost text-xl" href="{% url 'index' %}">
-                        <img src="{% static 'img/plm.png' %}" alt="PLM" class="h-8 w-8" />
-                        <span class="hidden md:block">
-                            PLM Attendance Management System
-                        </span>
-                    </a>
-                </div>
-                <div class="flex-none">
-                    <!-- Current date and time -->
-                    <span id="current-datetime" class="text-sm">
-                        <c-loader-sm />
+<script>
+    // Function to display current date and time in the desired format
+    function updateDateTime() {
+        const now = new Date();
+        const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+        const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        const formattedDate = now.toLocaleDateString('en-US', options).replace(',', '.');
+        document.getElementById('current-datetime').textContent = `${formattedDate} · ${time}`;
+    }
+    setInterval(updateDateTime, 1000); // Update every second
+</script>
+<div class="drawer sticky top-0 left-0 z-50">
+    <input id="my-drawer" type="checkbox" class="drawer-toggle" />
+    <div class="drawer-content">
+        <!-- Page content here -->
+        <div class="navbar bg-base-100/80 backdrop-blur-md z-40">
+            <div class="flex-none">
+                <label for="my-drawer" class="btn btn-square btn-ghost">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                        class="inline-block h-5 w-5 stroke-current">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h16M4 18h16"></path>
+                    </svg>
+                </label>
+            </div>
+            <div class="flex-1">
+                <a class="btn btn-ghost text-xl" href="{% url 'index' %}">
+                    <img src="{% static 'img/plm.png' %}" alt="PLM" class="h-8 w-8" />
+                    <span class="hidden md:block">
+                        PLM Attendance Management System
                     </span>
-                </div>
+                </a>
+            </div>
+            <div class="flex-none">
+                <!-- Current date and time -->
+                <span id="current-datetime" class="text-sm">
+                    <c-loader-sm />
+                </span>
             </div>
         </div>
-        <div class="drawer-side">
-            <label for="my-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-            <ul class="menu bg-base-200 text-base-content min-h-full w-80 p-4">
-                <!-- Sidebar content here -->
-                <li><a href="admin/">Admin</a></li>
-            </ul>
-        </div>
     </div>
-</body>
-
-</html>
+    <div class="drawer-side">
+        <label for="my-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+        <ul class="menu bg-base-200 text-base-content min-h-full w-80 p-4">
+            <!-- Sidebar content here -->
+            <li><a href="admin/">Admin</a></li>
+        </ul>
+    </div>
+</div>

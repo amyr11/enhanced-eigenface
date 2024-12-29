@@ -1,7 +1,140 @@
 {% extends 'bases/base.html' %}
+{% load static %}
 
 {% block content %}
-<div>
-    <c-nav />
+<div class="flex gap-16 w-fit mx-auto">
+    <div class="flex flex-col gap-6 min-w-[50rem] max-w-[50rem] w-full">
+        <!-- student info -->
+        <div class="flex gap-6 items-center">
+            <!-- image -->
+            <div class="avatar">
+                <div class="w-20 rounded-full">
+                    <img src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp" />
+                </div>
+            </div>
+            <div class="flex flex-col gap-1">
+                <p class="text-3xl font-medium">{{ name }}</p>
+                <div class="flex gap-2 items-center">
+                    <p class="text-xl text-black/50">{{ time }}</p>
+                    <c-badge-md
+                        class="{% if type == 'Time in' %} {{ 'bg-green-100 text-green-600' }} {% else %} {{ 'bg-yellow-100 text-yellow-600' }} {% endif %}">{{
+                        type }}</c-badge-md>
+                </div>
+            </div>
+        </div>
+        <!-- class status -->
+        <c-badge-lg
+            class="{% if schedules %} {{ 'bg-green-100 text-green-600' }} {% else %} {{ 'bg-red-100 text-red-600' }} {% endif %}">
+            {% if schedules %} {{ 'Have Classes Today' }} {% else %} {{ 'No Classes Today' }} {% endif %}
+        </c-badge-lg>
+        <!-- class schedule today -->
+        {% if schedules %}
+        <div class="flex flex-col gap-2 mb-6">
+            {% for schedule in schedules %}
+            <div class="flex gap-2">
+                <div class="h-full w-1 bg-green-600 rounded-full"></div>
+                <p class="flex gap-4 text-xl">
+                    <span class="font-medium text-green-600">{{ schedule.start_time }} - {{ schedule.end_time}}</span>
+                    <span class="text-black/50">{{ schedule.title }}</span>
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <!-- SER section -->
+        <div class="relative border-2 overflow-clip rounded-lg h-fit w-full">
+            <!-- Fullscreen button -->
+            <button class="absolute top-2 right-2 bg-black/50 text-white p-2 hover:bg-black btn btn-circle"
+                onclick="ser_modal.showModal()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                    stroke="currentColor" class="size-6">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                </svg>
+            </button>
+            <img src="{% static 'img/sampleser.png' %}" alt="SER" class="object-cover" />
+        </div>
+        <!-- full screen SER modal -->
+        <dialog id="ser_modal" class="modal">
+            <div class="relative">
+                <img src="{% static 'img/sampleser.png' %}" alt="SER Fullscreen"
+                    class="max-w-full max-h-screen object-contain w-screen h-screen" />
+                <form method="dialog">
+                    <button
+                        class="absolute top-4 right-4 text-white bg-black/50 p-2 rounded-full hover:bg-black btn btn-circle">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5"
+                            stroke="currentColor" class="size-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </dialog>
+    </div>
+    <div class="flex flex-col gap-8">
+        <!-- video feed -->
+        <div>
+            <div
+                class="relative overflow-hidden min-w-[25rem] min-h-[25rem] w-[25rem] h-[25rem] bg-base-200 rounded-2xl">
+                <video class="scale-x-[-1] object-cover h-full w-full" id="video" width="640" height="480" autoplay
+                    playsinline></video>
+                <svg class="absolute top-0 left-0 w-full h-full" viewBox="0 0 481 481" fill="none"
+                    xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd"
+                        d="M481 0H0V481H481V0ZM240.5 416C316.439 416 378 338.321 378 242.5C378 146.679 316.439 69 240.5 69C164.561 69 103 146.679 103 242.5C103 338.321 164.561 416 240.5 416Z"
+                        fill="white" fill-opacity="0.65" />
+                    <path
+                        d="M240.5 420C319.466 420 382 339.613 382 242.5C382 145.387 319.466 65 240.5 65C161.534 65 99 145.387 99 242.5C99 339.613 161.534 420 240.5 420Z"
+                        stroke="white" stroke-width="8" />
+                </svg>
+            </div>
+            <script>
+                const video = document.getElementById("video");
+                video.hidden = true;
+                navigator.mediaDevices
+                    .getUserMedia({
+                        video: {
+                            facingMode: "user"
+                        }
+                    })
+                    .then((stream) => {
+                        video.srcObject = stream;
+                        video.hidden = false;
+                    })
+                    .catch((err) => console.error("Camera error:", err));
+            </script>
+            <p class="w-full text-center mt-2 text-lg text-black/50">Center your face into the camera</p>
+        </div>
+        <!-- recent entries -->
+        <div>
+            <p class="text-xl font-medium">Recent</p>
+            <hr class="mt-2">
+            <div class="relative h-fit w-full">
+                <div class="flex flex-col gap-4 pt-4 h-80 overflow-y-scroll pb-16">
+                    {% for recent in recents %}
+                    <div class="flex gap-2 items-center">
+                        <!-- image -->
+                        <div class="avatar">
+                            <div class="w-12 rounded-full">
+                                <img src="{{ recent.image_url }}" />
+                            </div>
+                        </div>
+                        <div class="flex flex-col">
+                            <p>{{ recent.name }}</p>
+                            <div class="flex gap-2 items-center">
+                                <p class="text-black/50">{{ recent.time }}</p>
+                                <c-badge-sm
+                                    class="{% if recent.type == 'Time in' %} {{ 'bg-green-100 text-green-600' }} {% else %} {{ 'bg-yellow-100 text-yellow-600' }} {% endif %}">{{
+                                    recent.type }}</c-badge-sm>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <!-- gradient white -->
+                <div class="absolute bottom-0 w-full h-32 bg-gradient-to-t from-base-100 to-transparent"></div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
