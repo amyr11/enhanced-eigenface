@@ -27,6 +27,7 @@ decorator==5.1.1
 defusedxml==0.7.1
 Django==5.1.4
 django-browser-reload==1.17.0
+django-cotton==1.5.1
 django-tailwind==3.8.0
 executing==2.1.0
 fastjsonschema==2.20.0
